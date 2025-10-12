@@ -60,7 +60,7 @@ class InstallerWindow(QMainWindow):
 
         # Create stacked widget for pages
         self.pages = QStackedWidget()
-        self.page_list: list[QWidget] = []  # store pages in order
+        self.page_list: list[QWidget] = []
 
         # Navigation buttons
         self.back_btn = QPushButton("Back")
@@ -74,7 +74,7 @@ class InstallerWindow(QMainWindow):
 
         # Layout setup
         nav_layout = QHBoxLayout()
-        nav_layout.addStretch()  # push buttons to the right
+        nav_layout.addStretch()
         nav_layout.addWidget(self.back_btn)
         nav_layout.addWidget(self.next_btn)
         nav_layout.addWidget(self.quit_btn)
@@ -151,7 +151,7 @@ class InstallerWindow(QMainWindow):
 
         # Add image (logo or banner)
         image = QLabel()
-        pix = QPixmap("idioma.png")  # example
+        pix = QPixmap("idioma.png")
         image.setPixmap(pix.scaledToWidth(450))
         image.setStyleSheet("margin-top: 96px;")
         image.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -346,7 +346,7 @@ class InstallerWindow(QMainWindow):
                 )
                 if reply == QMessageBox.StandardButton.Yes:
                     self.pages.setCurrentIndex(current + 1)
-                    #self.start_installation()
+                    self.start_installation()
             else:
                 self.pages.setCurrentIndex(current + 1)
 
