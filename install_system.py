@@ -13,7 +13,11 @@ class Installer:
         subprocess.run(["mount", dev, path])
 
     def install_base(self):
-        subprocess.run(["pacstrap", self.root, "base linux linux-firmware nano networkmanager grub efibootmgr sudo"])
+        subprocess.run(
+            ["pacstrap", self.root, "base", "linux", "linux-firmware", "bash", "nano", "networkmanager", "grub", "efibootmgr", "sudo"],
+            check=True,
+            env=os.environ.copy()
+        )
 
     def gen_fstab(self):
         with open(f"{self.root}/etc/fstab", "a") as f:
@@ -37,7 +41,10 @@ class Installer:
 
     def bootloader(self):
         self.app.logger.log(f"  Installing grub...")
-        self.crexe("grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=CosmicOS")
+        if self.sett['uefi']:
+            self.crexe("grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=CosmicOS")
+        else:
+            self.crexe("grub-install --target=i386 /dev/sda")
         self.app.logger.log(f"  Creating grub config...")
         self.crexe("grub-mkconfig -o /boot/grub/grub.cfg")
 
@@ -109,14 +116,14 @@ class Installer:
             ]
         }
         others = [
-            "firefox", "git", "htop", "btop", "7zip", "adwaita-cursors", "adwaita-fonts", "adwaita-icon-theme", "adwaita-icon-theme-legacy", "amd-ucode", "amdvlk",
-            "ark", "audacity", "base-devel", "blender", "bzip2", "clang", "cmake", "cmatrix", "curl", "dav1d", "dconf", "ddrescue", "discord", "dosbox", "exfatprogs",
-            "ffmpeg", "filezilla", "firefox", "flatpak", "fluidsynth", "gcc",  "gimp", "git", "glad", "glew", "glfw", "glibc", "glm", "go", "gparted", "gradle", "grep",
-            "gtk2", "gtk3", "gtk4", "gzip", "heimdall", "hexedit", "hwinfo", "imagemagick", "imath", "inkscape", "jdk-openjdk", "kdenlive", "kitty", "less", "lm_sensors",
-            "lua", "mousepad", "nano", "nasm", "ninja", "openal", "openssh", "parted", "pavucontrol", "pipewire", "pipewire-audio", "python", "python-numpy",
-            "python-opengl", "python-pillow", "python-pip", "python-pyqt6", "qt5", "qt5ct", "qt6", "qt6ct", "sdl2_image", "sdl2_mixer", "sdl2_ttf", "sdl3", "steam",
-            "thunar", "ttf-fira-code", "ttf-firacode-nerd", "unzip", "vlc", "wacomtablet", "wget", "wine", "wl-clipboard", "woff2", "zsh", "zsh-autosuggestions",
-            "zsh-completions", "zsh-syntax-highlighting"
+            "firefox", "git", "htop", "btop", "7zip", "adwaita-cursors", "adwaita-fonts", "adwaita-icon-theme", "adwaita-icon-theme-legacy", "amd-ucode", "ark",
+            "audacity", "base-devel", "blender", "bzip2", "clang", "cmake", "cmatrix", "curl", "dav1d", "dconf", "ddrescue", "discord", "dosbox", "exfatprogs",
+            "ffmpeg", "filezilla", "firefox", "flatpak", "fluidsynth", "gcc",  "gimp", "git", "glad", "glew", "glfw", "glibc", "glm", "go", "gparted", "gradle",
+            "grep", "gtk2", "gtk3", "gtk4", "gzip", "heimdall", "hexedit", "hwinfo", "imagemagick", "imath", "inkscape", "jdk-openjdk", "kdenlive", "kitty",
+            "less", "lm_sensors", "lua", "mousepad", "nano", "nasm", "ninja", "openal", "openssh", "parted", "pavucontrol", "pipewire", "pipewire-audio", "python",
+            "python-numpy", "python-opengl", "python-pillow", "python-pip", "python-pyqt6", "qt5", "qt5ct", "qt6", "qt6ct", "sdl2_image", "sdl2_mixer", "sdl2_ttf",
+            "sdl3", "steam", "thunar", "ttf-fira-code", "ttf-firacode-nerd", "unzip", "vlc", "wacomtablet", "wget", "wine", "wl-clipboard", "woff2", "zsh",
+            "zsh-autosuggestions", "zsh-completions", "zsh-syntax-highlighting"
         ]
         if self.sett['de'] not in desktops.keys():
             raise ValueError("Wrong desktop environment. Choose from 'gnome', 'plasma', 'mate' and 'hypr'.")
@@ -151,15 +158,29 @@ class Installer:
         self.app.logger.log(f"  Removing temporary user...")
         subprocess.run(["userdel", "-f", "-r", "-R", self.root])
 
+    def unmount_all(self):
+        subprocess.run(["sync"])
+        subprocess.run(["umount", "-R", f"{self.root}{self.sett['parts'][0]['path']}"], check=False)
+        subprocess.run(["umount", "-R", f"{self.root}{self.sett['parts'][2]['path']}"], check=False)
+        subprocess.run(["umount", "-R", f"{self.root}{self.sett['parts'][1]['path']}"], check=False)
+
     def crexe(self, cmd: str):
         subprocess.run(["arch-chroot", self.root, "bash", "-c", cmd], check=True)
 
     def install(self):
         # Mount partitions
         self.app.logger.log(f"[1/10] Mounting partitions...")
-        self.mount_part(self.sett['parts'][0]['part'], f"{self.root}{self.sett['parts'][0]['path']}")
+        subprocess.run(["mkdir", "-p", self.root])
         self.mount_part(self.sett['parts'][1]['part'], f"{self.root}{self.sett['parts'][1]['path']}")
+        subprocess.run(["mkdir", "-p", f"{self.root}/boot"])
+        subprocess.run(["mkdir", "-p", f"{self.root}/boot/efi"])
+        subprocess.run(["mkdir", "-p", f"{self.root}/home"])
+        self.mount_part(self.sett['parts'][0]['part'], f"{self.root}{self.sett['parts'][0]['path']}")
         self.mount_part(self.sett['parts'][2]['part'], f"{self.root}{self.sett['parts'][2]['path']}")
+        subprocess.run(["mount", "--bind", "/dev", f"{self.root}/dev"])
+        subprocess.run(["mount", "--bind", "/sys", f"{self.root}/sys"])
+        subprocess.run(["mount", "--bind", "/proc", f"{self.root}/proc"])
+        subprocess.run(["mount", "--bind", "/run", f"{self.root}/run"])
 
         # Install system
         self.app.logger.log(f"[2/10] Installing base system...")
@@ -176,20 +197,20 @@ class Installer:
         self.app.logger.log(f"[5/10] Installing bootloader...")
         self.bootloader()
 
-        # Enable network and ssh
-        self.app.logger.log(f"[6/10] Enabling daemons...")
-        self.enable_stuff()
-
         # Add user
-        self.app.logger.log(f"[7/10] Creating users...")
+        self.app.logger.log(f"[6/10] Creating users...")
         self.add_users()
 
         # Delete any user credentials before handling packages (especially AUR)
         self.sett['users'] = {}
 
-        # Install desktop
-        self.app.logger.log(f"[8/10] Installing packages... (this might take a while)")
+        # Install desktop & apps
+        self.app.logger.log(f"[7/10] Installing packages... (this might take a while)")
         self.install_desktop()
+
+        # Enable network and ssh
+        self.app.logger.log(f"[8/10] Enabling daemons...")
+        self.enable_stuff()
 
         # Install AUR helper
         self.app.logger.log(f"[9/10] Installing AUR helper...")
@@ -197,7 +218,6 @@ class Installer:
 
         # Unmount partitions
         self.app.logger.log(f"[10/10] Unmounting partitions...")
-        subprocess.run(["sync"])
-        subprocess.run(["umount", "-R", self.root], check=False)
+        self.unmount_all()
 
         self.app.logger.log(f"Installation complete!")

@@ -26,20 +26,20 @@ class InstallThread(QThread):
         self.success = False
         self.error_msg = ""
 
+        # Create dummy app-like object with logger
+        class DummyApp:
+            def __init__(self, log_signal):
+                self.logger = self
+                self.log_signal = log_signal
+
+            def log(self, msg):
+                self.log_signal.emit(msg)
+
+        self.inst = Installer(DummyApp(self.log_signal), self.root, self.settings)
+
     def run(self):
         try:
-            # Create dummy app-like object with logger
-            class DummyApp:
-                def __init__(self, log_signal):
-                    self.logger = self
-                    self.log_signal = log_signal
-
-                def log(self, msg):
-                    self.log_signal.emit(msg)
-
-            from install_system import Installer
-            inst = Installer(DummyApp(self.log_signal), self.root, self.settings)
-            inst.install()
+            self.inst.install()
             self.success = True
         except Exception as e:
             self.error_msg = str(e)
@@ -113,6 +113,7 @@ class InstallerWindow(QMainWindow):
         self.user_pass.textChanged.connect(self.update_buttons)
         self.root_pass.textChanged.connect(self.update_buttons)
         self.uefi.checkStateChanged.connect(self.update_buttons)
+        self.root_check.checkStateChanged.connect(self.update_buttons)
         self.user_pass.setEchoMode(QLineEdit.EchoMode.Password)
         self.root_pass.setEchoMode(QLineEdit.EchoMode.Password)
         self.root_check.checkStateChanged.connect(self.update_labels)
@@ -447,7 +448,7 @@ class InstallerWindow(QMainWindow):
                 'root_pass': self.root_pass.text() if not self.root_check.isChecked() else self.user_pass.text()
             },
             'hostname': self.hostname.text(),
-            'de': self.de.currentText().lower()
+            'de': ["gnome", "plasma", "mate", "hypr"][self.de.currentIndex()]
         }
 
         self.inst_thread = InstallThread("/mnt/install", settings)
@@ -466,6 +467,7 @@ class InstallerWindow(QMainWindow):
             self.pages.setCurrentIndex(self.pages.currentIndex() + 1)
         else:
             self.log_view.append(f"\nInstallation failed:\n\n----------------\nAw shit! Here we go again...\n----------------\n\n{msg}")
+            self.inst_thread.inst.unmount_all()
 
 
 if __name__ == "__main__":
